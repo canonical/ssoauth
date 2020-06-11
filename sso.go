@@ -1,3 +1,5 @@
+// Package ssoauth implements macaroon based authentication with
+// Canonical SSO.
 package ssoauth
 
 import (
