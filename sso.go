@@ -76,35 +76,37 @@ func (a *Authenticator) Macaroon(ctx context.Context) (*bakery.Macaroon, error) 
 	// SSO compatible third-party caveats use a different convention
 	// to standard bakery macaroons so it has to be created and
 	// attached in a custom manner.
-	//
-	// Note: there is no known documentation for this format, but the
-	// relevent sso code can be found in
-	// https://bazaar.launchpad.net/~ubuntuone-pqm-team/canonical-identity-provider/trunk/view/head:/src/identityprovider/auth.py
-	// and an example target service can be found in
-	// https://bazaar.launchpad.net/~ubuntuone-pqm-team/software-center-agent/trunk/view/head:/src/devportal/api/auth.py.
 	rootKey := make([]byte, 24)
 	if _, err = rand.Read(rootKey); err != nil {
 		return nil, errgo.Mask(err)
 	}
-	encryptedKey, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, a.p.PublicKey, rootKey[:], nil)
-	if err != nil {
+
+	if err := AddThirdPartyCaveat(m.M(), rootKey[:], a.p.Location, a.p.PublicKey); err != nil {
 		return nil, errgo.Mask(err)
-	}
-	var cid struct {
-		Secret  string `json:"secret"`
-		Version int    `json:"version"`
-	}
-	cid.Secret = base64.StdEncoding.EncodeToString(encryptedKey)
-	cid.Version = 1
-	caveatID, err := json.Marshal(cid)
-	if err != nil {
-		return nil, errgo.Mask(err)
-	}
-	if err := m.M().AddThirdPartyCaveat(rootKey, caveatID, a.p.Location); err != nil {
-		return nil, errgo.Notef(err, "cannot create macaroon")
 	}
 
 	return m, nil
+}
+
+// AddThirdPartyCaveat adds a third-party caveat to the given macaroon in
+// the format understood by the SSO server.
+func AddThirdPartyCaveat(m *macaroon.Macaroon, rootKey []byte, location string, pk *rsa.PublicKey) error {
+	encryptedKey, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, pk, rootKey, nil)
+	if err != nil {
+		return errgo.Mask(err)
+	}
+	var cid = struct {
+		Secret  string `json:"secret"`
+		Version int    `json:"version"`
+	}{
+		Secret:  base64.StdEncoding.EncodeToString(encryptedKey),
+		Version: 1,
+	}
+	caveatID, err := json.Marshal(cid)
+	if err != nil {
+		return errgo.Mask(err)
+	}
+	return errgo.Mask(m.AddThirdPartyCaveat(rootKey, caveatID, location))
 }
 
 // Authenticate checks that the given macaroon slice is a valid
@@ -125,72 +127,17 @@ func (a *Authenticator) Authenticate(ctx context.Context, ms macaroon.Slice) (*A
 	}
 
 	var account Account
-	var seenAccount, seenLastAuth bool
 
+	ssoChecker := CaveatChecker(a.p.Location, &account)
 	stdChecker := checkers.New(nil)
 	for _, cond := range conditions {
-		if !strings.HasPrefix(cond, a.p.Location+"|") {
-			if err := stdChecker.CheckFirstPartyCaveat(ctx, cond); err != nil {
+		if err := ssoChecker(cond); err != nil {
+			if err == ErrUnsupportedCaveat {
+				err = stdChecker.CheckFirstPartyCaveat(ctx, cond)
+			}
+			if err != nil {
 				return nil, errgo.WithCausef(err, ErrUnauthorized, "")
 			}
-			continue
-		}
-
-		parts := strings.SplitN(cond, "|", 3)
-		switch parts[1] {
-		case "account":
-			// account is a declarative caveat the the SSO
-			// server will only add one of. If we have
-			// already seen one then reject the macaroon.
-			if seenAccount {
-				return nil, errgo.WithCausef(nil, ErrUnauthorized, "duplicate caveat %q", cond)
-			}
-			seenAccount = true
-			b, err := base64.StdEncoding.DecodeString(parts[2])
-			if err != nil {
-				return nil, errgo.WithCausef(err, ErrUnauthorized, "cannot parse caveat %q", cond)
-			}
-			if err := json.Unmarshal(b, &account); err != nil {
-				return nil, errgo.WithCausef(err, ErrUnauthorized, "cannot parse caveat %q", cond)
-			}
-		case "expires":
-			// Ensure that now is before the macaroon expires.
-			t, err := time.Parse(timeFormat, parts[2])
-			if err != nil {
-				return nil, errgo.WithCausef(err, ErrUnauthorized, "cannot parse caveat %q", cond)
-			}
-			if !time.Now().Before(t) {
-				return nil, errgo.WithCausef(nil, ErrUnauthorized, "macaroon expired")
-			}
-		case "last_auth":
-			// last_auth is a declarative caveat the the SSO
-			// server will only add one of. If we have
-			// already seen one then reject the macaroon.
-			if seenLastAuth {
-				return nil, errgo.WithCausef(nil, ErrUnauthorized, "duplicate caveat %q", cond)
-			}
-			seenLastAuth = true
-			account.LastAuth, err = time.Parse(timeFormat, parts[2])
-			if err != nil {
-				return nil, errgo.WithCausef(err, ErrUnauthorized, "cannot parse caveat %q", cond)
-			}
-		case "valid_since":
-			// Ensure that now is after valid_since.
-			t, err := time.Parse(timeFormat, parts[2])
-			if err != nil {
-				return nil, errgo.WithCausef(err, ErrUnauthorized, "cannot parse caveat %q", cond)
-			}
-			if !time.Now().After(t) {
-				return nil, errgo.WithCausef(nil, ErrUnauthorized, "macaroon not yet valid")
-			}
-		default:
-			// Ideally we would fail here, but there is
-			// currently no guarantee that SSO won't add
-			// additional first-party caveats to the
-			// discharge macaroon (see
-			// https://bugs.launchpad.net/canonical-identity-provider/+bug/1814563).
-			// For now just log the unexpected caveat.
-			log.Printf("unexpected SSO caveat detected %q", cond)
 		}
 	}
 
@@ -217,4 +164,94 @@ func (a Account) Allow(_ context.Context, acl []string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// ErrUnsupportedCaveat is returned from the function created in
+// CaveatChecker when the caveat is not understood by the checker.
+var ErrUnsupportedCaveat = errgo.New("unsupported caveat")
+
+// CaveatChecker creates a function which verifies first-party caveats
+// added by the SSO server at the given location. Account information
+// returned from the SSO server will be stored in the given Account. The
+// returned function is suitable for using asthe check parameter with the
+// Verify method of macaroon.Macaroon. If any provided caveat is not
+// supported by this checker then an ErrUnsupportedCaveat error will be
+// returned.
+func CaveatChecker(location string, acc *Account) func(caveatID string) error {
+	if acc == nil {
+		acc = new(Account)
+	}
+	return func(caveatID string) error {
+		parts := strings.SplitN(caveatID, "|", 3)
+		if len(parts) < 2 || parts[0] != location {
+			return ErrUnsupportedCaveat
+		}
+		switch parts[1] {
+		case "account":
+			// account is a declarative caveat that the SSO
+			// server will only add one of. If we have
+			// already seen one then reject the macaroon.
+			if acc.OpenID != "" {
+				return errgo.Newf("duplicate caveat %q", caveatID)
+			}
+			if len(parts) < 3 {
+				return errgo.Newf("malformed caveat %q", caveatID)
+			}
+			b, err := base64.StdEncoding.DecodeString(parts[2])
+			if err != nil {
+				return errgo.Notef(err, "cannot parse caveat %q", caveatID)
+			}
+			if err := json.Unmarshal(b, &acc); err != nil {
+				return errgo.Notef(err, "cannot parse caveat %q", caveatID)
+			}
+		case "expires":
+			if len(parts) < 3 {
+				return errgo.Newf("malformed caveat %q", caveatID)
+			}
+			// Ensure that now is before the macaroon expires.
+			t, err := time.Parse(timeFormat, parts[2])
+			if err != nil {
+				return errgo.Notef(err, "cannot parse caveat %q", caveatID)
+			}
+			if !time.Now().Before(t) {
+				return errgo.New("macaroon expired")
+			}
+		case "last_auth":
+			// last_auth is a declarative caveat the the SSO
+			// server will only add one of. If we have
+			// already seen one then reject the macaroon.
+			if !acc.LastAuth.IsZero() {
+				return errgo.Newf("duplicate caveat %q", caveatID)
+			}
+			if len(parts) < 3 {
+				return errgo.Newf("malformed caveat %q", caveatID)
+			}
+			var err error
+			acc.LastAuth, err = time.Parse(timeFormat, parts[2])
+			if err != nil {
+				return errgo.Notef(err, "cannot parse caveat %q", caveatID)
+			}
+		case "valid_since":
+			// Ensure that now is after valid_since.
+			if len(parts) < 3 {
+				return errgo.Newf("malformed caveat %q", caveatID)
+			}
+			t, err := time.Parse(timeFormat, parts[2])
+			if err != nil {
+				return errgo.Notef(err, "cannot parse caveat %q", caveatID)
+			}
+			if !time.Now().After(t) {
+				return errgo.New("macaroon not yet valid")
+			}
+		default:
+			// Ideally we would fail here, but there is
+			// currently no guarantee that SSO won't add
+			// additional first-party caveats to the
+			// discharge macaroon. For now just log the
+			// unexpected caveat.
+			log.Printf("unexpected SSO caveat detected %q", caveatID)
+		}
+
+		return nil
+	}
 }
