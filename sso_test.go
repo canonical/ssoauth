@@ -11,8 +11,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/juju/zaputil/zapctx"
-	"go.uber.org/zap/zaptest"
 	errgo "gopkg.in/errgo.v1"
 	"gopkg.in/macaroon-bakery.v2/bakery"
 	"gopkg.in/macaroon-bakery.v2/bakery/checkers"
@@ -26,7 +24,7 @@ var discharger = new(ssoauthtest.Discharger)
 
 func TestMacaroon(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -54,7 +52,7 @@ func TestMacaroon(t *testing.T) {
 
 func TestAuthenticate(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -93,7 +91,7 @@ func TestAuthenticate(t *testing.T) {
 
 func TestAuthenticateNoRoot(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -133,7 +131,7 @@ func TestAuthenticateNoRoot(t *testing.T) {
 
 func TestAuthenticateIncorrectOp(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -192,8 +190,8 @@ var authenticateUnauthorizedTests = []struct {
 }, {
 	name: "multiple-accounts",
 	caveats: []string{
-		discharger.Location() + "|account|e30=",
-		discharger.Location() + "|account|e30=",
+		discharger.Location() + "|account|eyJvcGVuaWQiOiJBQUFBQUFBIn0=",
+		discharger.Location() + "|account|eyJvcGVuaWQiOiJBQUFBQUFBIn0=",
 	},
 	expectError: `duplicate caveat "` + discharger.Location() + `\|account\|.*`,
 }, {
@@ -243,7 +241,7 @@ var authenticateUnauthorizedTests = []struct {
 
 func TestAuthenticateUnauthorized(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -261,7 +259,7 @@ func TestAuthenticateUnauthorized(t *testing.T) {
 	for _, test := range authenticateUnauthorizedTests {
 		test := test
 		c.Run(test.name, func(c *qt.C) {
-			ctx := testContext(c)
+			ctx := context.Background()
 
 			// Create a discharge macaroon.
 			discharge, err := discharger.Discharge(caveatID, nil, time.Time{}, time.Time{})
@@ -280,7 +278,7 @@ func TestAuthenticateUnauthorized(t *testing.T) {
 
 func TestUnknownSSOFirstPartyCaveats(t *testing.T) {
 	c := qt.New(t)
-	ctx := testContext(c)
+	ctx := context.Background()
 
 	o := bakery.NewOven(bakery.OvenParams{})
 	a := ssoauth.New(ssoauth.Params{
@@ -316,6 +314,47 @@ func TestUnknownSSOFirstPartyCaveats(t *testing.T) {
 	c.Assert(account, qt.DeepEquals, &expectAccount)
 }
 
-func testContext(c *qt.C) context.Context {
-	return zapctx.WithLogger(context.Background(), zaptest.NewLogger(c))
+func TestMacaroonRoundTrip(t *testing.T) {
+	c := qt.New(t)
+
+	var rk1 [24]byte
+	_, err := rand.Read(rk1[:])
+	c.Assert(err, qt.IsNil)
+
+	m, err := macaroon.New(rk1[:], []byte("test-key"), "", macaroon.V2)
+	c.Assert(err, qt.IsNil)
+
+	var rk2 [24]byte
+	_, err = rand.Read(rk2[:])
+	c.Assert(err, qt.IsNil)
+	err = ssoauth.AddThirdPartyCaveat(m, rk2[:], discharger.Location(), discharger.PublicKey())
+	c.Assert(err, qt.IsNil)
+
+	var caveatID []byte
+	for _, cav := range m.Caveats() {
+		if cav.VerificationId == nil || cav.Location != discharger.Location() {
+			continue
+		}
+
+		caveatID = cav.Id
+	}
+
+	now := time.Now().UTC()
+	expectAccount := ssoauth.Account{
+		OpenID:      "AAAAAAA",
+		Username:    "test-user",
+		DisplayName: "Test User",
+		Email:       "test@example.com",
+		IsVerified:  true,
+		LastAuth:    now.Truncate(time.Microsecond),
+	}
+	discharge, err := discharger.Discharge(caveatID, &expectAccount, now.Add(time.Minute), now.Add(-1*time.Minute))
+	c.Assert(err, qt.IsNil)
+	discharge.Bind(m.Signature())
+
+	var acc ssoauth.Account
+	err = m.Verify(rk1[:], ssoauth.CaveatChecker(discharger.Location(), &acc), []*macaroon.Macaroon{discharge})
+	c.Assert(err, qt.IsNil)
+
+	c.Assert(acc, qt.DeepEquals, expectAccount)
 }
