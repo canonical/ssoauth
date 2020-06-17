@@ -155,17 +155,6 @@ type Account struct {
 	LastAuth    time.Time `json:"-"`
 }
 
-// Allow checks if the Account is included in the given ACL.
-func (a Account) Allow(_ context.Context, acl []string) (bool, error) {
-	aclID := "https://login.ubuntu.com/+id/" + a.OpenID
-	for _, a := range acl {
-		if a == aclID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // ErrUnsupportedCaveat is returned from the function created in
 // CaveatChecker when the caveat is not understood by the checker.
 var ErrUnsupportedCaveat = errgo.New("unsupported caveat")
