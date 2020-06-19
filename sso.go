@@ -147,6 +147,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, ms macaroon.Slice) (*A
 // Account contains the details of the authenticated user that Ubuntu
 // SSO added to the discharge macaroon.
 type Account struct {
+	Provider    string    `json:"-"`
 	OpenID      string    `json:"openid"`
 	Username    string    `json:"username"`
 	DisplayName string    `json:"displayname"`
@@ -180,9 +181,10 @@ func CaveatChecker(location string, acc *Account) func(caveatID string) error {
 			// account is a declarative caveat that the SSO
 			// server will only add one of. If we have
 			// already seen one then reject the macaroon.
-			if acc.OpenID != "" {
+			if acc.Provider != "" {
 				return errgo.Newf("duplicate caveat %q", caveatID)
 			}
+			acc.Provider = parts[0]
 			if len(parts) < 3 {
 				return errgo.Newf("malformed caveat %q", caveatID)
 			}
