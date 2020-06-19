@@ -68,6 +68,7 @@ func TestAuthenticate(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	now := time.Now().UTC()
 	expectAccount := ssoauth.Account{
+		Provider:    "login.example.com",
 		OpenID:      "AAAAAAA",
 		Username:    "test-user",
 		DisplayName: "Test User",
@@ -296,6 +297,7 @@ func TestUnknownSSOFirstPartyCaveats(t *testing.T) {
 	// Create a discharge macaroon.
 	now := time.Now().UTC()
 	expectAccount := ssoauth.Account{
+		Provider:    "login.example.com",
 		OpenID:      "AAAAAAA",
 		Username:    "test-user",
 		DisplayName: "Test User",
@@ -341,6 +343,7 @@ func TestMacaroonRoundTrip(t *testing.T) {
 
 	now := time.Now().UTC()
 	expectAccount := ssoauth.Account{
+		Provider:    "login.example.com",
 		OpenID:      "AAAAAAA",
 		Username:    "test-user",
 		DisplayName: "Test User",
