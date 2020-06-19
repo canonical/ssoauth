@@ -52,7 +52,10 @@ type ACLMatcher map[string]IdentityMatcher
 // ACLMatcher to find the particular IdentityMatcher to use for that
 // identity. If the identity is not a valid URL, or there is no
 // IdentityMatcher for the host then the account does not match that
-// identity. If an IdentityMatcher
+// identity. If an IdentityMatcher returns an error it will be bundled
+// with any errors from other identity matchers into an ACLMatchError
+// structure, this is the only error type returned by this
+// IdentityMatcher.
 func (m ACLMatcher) MatchIdentity(ctx context.Context, acc *ssoauth.Account, ids []string) ([]string, error) {
 	idmap := make(map[string][]string)
 
