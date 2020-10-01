@@ -1,3 +1,6 @@
+// Copyright 2020 Canonical Ltd.
+// Licensed under the LGPLv3, see LICENCE file for details.
+
 package store
 
 import (
@@ -9,16 +12,8 @@ import (
 	"gopkg.in/errgo.v1"
 )
 
-// tokenStoreLocation returns the location of the token store given a service
-// name following the pattern of ~/.local/share/<serviceName>/tokens or the
-// one defined by env variable XDG_DATA_HOME/tokens directory.
-func TokenStoreLocation(serviceName string) string {
-	if p := os.Getenv("XDG_DATA_HOME"); p != "" {
-		return filepath.Join(p, serviceName, "tokens")
-	}
-	return filepath.Join(os.Getenv("HOME"), ".local", "share", serviceName, "tokens")
-}
-
+// TokenStore implements the read and write actions in order to handle
+// token information.
 type TokenStore string
 
 // Get retrieves the token stored for the given URL, if present.

@@ -1,20 +1,23 @@
-package store
+// Copyright 2020 Canonical Ltd.
+// Licensed under the LGPLv3, see LICENCE file for details.
+
+package store_test
 
 import (
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
+	"github.com/canonical/ssoauth/store"
 )
 
 func TestGetWhenFileExists(t *testing.T) {
 	c := qt.New(t)
-	storeLocation := os.TempDir()
+	storeLocation := c.Mkdir()
 	tempFile, err := ioutil.TempFile(storeLocation, "")
 	c.Assert(err, qt.IsNil)
-	defer os.Remove(tempFile.Name())
 
 	token := []byte("popeye")
 	url := tempFile.Name()
@@ -22,8 +25,8 @@ func TestGetWhenFileExists(t *testing.T) {
 	err = ioutil.WriteFile(url, token, 0644)
 	c.Assert(err, qt.IsNil)
 
-	store := TokenStore(storeLocation)
-	bytes, err := store.Get(fileName)
+	ts := store.TokenStore(storeLocation)
+	bytes, err := ts.Get(fileName)
 	c.Assert(err, qt.IsNil)
 	c.Assert(token, qt.DeepEquals, bytes)
 }
@@ -32,16 +35,16 @@ func TestGetWhenDoesNotExistIsOK(t *testing.T) {
 	c := qt.New(t)
 	storeLocation := "/does-not/exist/yyy/zzz"
 
-	store := TokenStore(storeLocation)
-	_, err := store.Get("abc")
+	ts := store.TokenStore(storeLocation)
+	_, err := ts.Get("abc")
 	c.Assert(err, qt.IsNil)
 }
 
-func TestSetWhenDoesNotExistIsKO(t *testing.T) {
+func TestSetWhenDoesNotExistIsOK(t *testing.T) {
 	c := qt.New(t)
 	storeLocation := "/etc/passwd/"
 
-	store := TokenStore(storeLocation)
-	err := store.Set("foo", []byte{})
+	ts := store.TokenStore(storeLocation)
+	err := ts.Set("foo", []byte{})
 	c.Assert(err, qt.ErrorMatches, `remove /etc/passwd/foo: not a directory`)
 }
