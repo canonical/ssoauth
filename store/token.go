@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -12,12 +13,14 @@ import (
 	"gopkg.in/errgo.v1"
 )
 
-// TokenStore implements the read and write actions in order to handle
-// token information.
-type TokenStore string
+// DirTokenStore provides filesystem storage for arbitrary tokens, keyed by
+// URL. The value of the DirTokenStore is the directory in which the tokens
+// are stored, if this directory does not exist it will be created when
+// required.
+type DirTokenStore string
 
 // Get retrieves the token stored for the given URL, if present.
-func (s TokenStore) Get(url string) ([]byte, error) {
+func (s DirTokenStore) Get(_ context.Context, url string) ([]byte, error) {
 	path := filepath.Join(string(s), filenameForURL(url))
 	b, err := ioutil.ReadFile(path)
 	if err != nil && os.IsNotExist(err) {
@@ -27,7 +30,7 @@ func (s TokenStore) Get(url string) ([]byte, error) {
 }
 
 // Set stores the given token for the given URL.
-func (s TokenStore) Set(url string, token []byte) error {
+func (s DirTokenStore) Set(_ context.Context, url string, token []byte) error {
 	path := filepath.Join(string(s), filenameForURL(url))
 	if len(token) == 0 {
 		err := os.Remove(path)

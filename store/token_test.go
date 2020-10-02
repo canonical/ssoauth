@@ -4,6 +4,7 @@
 package store_test
 
 import (
+	"context"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,16 @@ import (
 
 	"github.com/canonical/ssoauth/store"
 )
+
+func TestDirTokenStoreRoundTrip(t *testing.T) {
+	c := qt.New(t)
+	ts := store.DirTokenStore(c.Mkdir())
+	err := ts.Set(context.Background(), "https://example.com", []byte("test-token"))
+	c.Assert(err, qt.IsNil)
+	token, err := ts.Get(context.Background(), "https://example.com")
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(token), qt.Equals, "test-token")
+}
 
 func TestGetWhenFileExists(t *testing.T) {
 	c := qt.New(t)
@@ -25,8 +36,8 @@ func TestGetWhenFileExists(t *testing.T) {
 	err = ioutil.WriteFile(url, token, 0644)
 	c.Assert(err, qt.IsNil)
 
-	ts := store.TokenStore(storeLocation)
-	bytes, err := ts.Get(fileName)
+	ts := store.DirTokenStore(storeLocation)
+	bytes, err := ts.Get(context.Background(), fileName)
 	c.Assert(err, qt.IsNil)
 	c.Assert(token, qt.DeepEquals, bytes)
 }
@@ -35,8 +46,8 @@ func TestGetWhenDoesNotExistIsOK(t *testing.T) {
 	c := qt.New(t)
 	storeLocation := "/does-not/exist/yyy/zzz"
 
-	ts := store.TokenStore(storeLocation)
-	_, err := ts.Get("abc")
+	ts := store.DirTokenStore(storeLocation)
+	_, err := ts.Get(context.Background(), "abc")
 	c.Assert(err, qt.IsNil)
 }
 
@@ -44,7 +55,7 @@ func TestSetWhenDoesNotExistIsOK(t *testing.T) {
 	c := qt.New(t)
 	storeLocation := "/etc/passwd/"
 
-	ts := store.TokenStore(storeLocation)
-	err := ts.Set("foo", []byte{})
+	ts := store.DirTokenStore(storeLocation)
+	err := ts.Set(context.Background(), "foo", []byte{})
 	c.Assert(err, qt.ErrorMatches, `remove /etc/passwd/foo: not a directory`)
 }
