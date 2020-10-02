@@ -1,3 +1,6 @@
+// Copyright 2020 Canonical Ltd.
+// Licensed under the LGPLv3, see LICENCE file for details.
+
 // Package ssoauthacl provides mechanisms to match accounts to identity
 // lists.
 package ssoauthacl
