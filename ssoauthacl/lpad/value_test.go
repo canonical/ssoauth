@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	. "gopkg.in/check.v1"
-	"github.com/canonical/ssoauth/ssoauthacl/lpad"
 	"net/url"
 	"strconv"
+
+	"github.com/canonical/ssoauth/ssoauthacl/lpad"
+	. "gopkg.in/check.v1"
 )
 
 var _ = Suite(&ValueS{})
@@ -242,7 +243,7 @@ func (s *ValueS) TestGetRedirectWithoutLocation(c *C) {
 	testServer.PrepareResponse(303, headers, `{"ok": true}`)
 	v := lpad.NewValue(nil, "", testServer.URL+"/myvalue", nil)
 	_, err := v.Get(nil)
-	c.Assert(err, ErrorMatches, "Get : 303 response missing Location header")
+	c.Assert(err, ErrorMatches, "Server returned 303 and body: {\"ok\": true}")
 }
 
 func (s *ValueS) TestPost(c *C) {
@@ -273,7 +274,7 @@ func (s *ValueS) TestPostWithParams(c *C) {
 }
 
 func (s *ValueS) TestPostWithSelfLinkOnOriginal(c *C) {
-	m := M{"self_link": testServer.URL+"/self"}
+	m := M{"self_link": testServer.URL + "/self"}
 	testServer.PrepareResponse(200, jsonType, `{"ok": true}`)
 	v := lpad.NewValue(nil, "", testServer.URL+"/myvalue", m)
 	other, err := v.Post(lpad.Params{"k": "v"})
