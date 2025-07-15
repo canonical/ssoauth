@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=launchpad.net/lpad
+TARG=github.com/canonical/ssoauth/ssoauthacl/lpad
 
 GOFILES=\
 	archive.go\
@@ -19,7 +19,7 @@ GOFILES=\
 
 include $(GOROOT)/src/Make.pkg
 
-runexample: _obj/launchpad.net/lpad.a
+runexample: _obj/github.com/canonical/ssoauth/ssoauthacl/lpad.a
 	$(GC) -I _obj -o example.$(O) example.go
 	$(LD) -L _obj -o example example.$(O)
 	./example

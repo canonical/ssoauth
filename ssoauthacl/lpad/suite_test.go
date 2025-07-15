@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"net/http"
 	"net/url"
 	"os"

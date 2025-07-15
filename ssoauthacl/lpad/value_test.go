@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	. "launchpad.net/gocheck"
-	"launchpad.net/lpad"
+	. "gopkg.in/check.v1"
+	"github.com/canonical/ssoauth/ssoauthacl/lpad"
 	"net/url"
 	"strconv"
 )

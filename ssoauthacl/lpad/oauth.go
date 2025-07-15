@@ -21,15 +21,14 @@ import (
 //
 // For more details, see Launchpad's documentation on the subject:
 //
-//     https://help.launchpad.net/API/SigningRequests
-//
+//	https://help.launchpad.net/API/SigningRequests
 type OAuth struct {
 	BaseURL            string             // Defaults to https://(staging.)launchpad.net/
 	AuthURL            string             // Set by Login before Callback is called
 	Callback           func(*OAuth) error // Called by Login to get user to AuthURL
 	CallbackURL        string             // Optional. AuthURL will redirect here after confirmation
 	Token, TokenSecret string             // Credentials obtained
-	Consumer           string             // Consumer name. Defaults to "https://launchpad.net/lpad"
+	Consumer           string             // Consumer name. Defaults to "https://github.com/canonical/ssoauth/ssoauthacl/lpad"
 	Anonymous          bool               // Don't try to login
 }
 

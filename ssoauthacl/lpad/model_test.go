@@ -1,7 +1,7 @@
 package lpad_test
 
 import (
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 )
 
 var _ = Suite(&ModelS{})
