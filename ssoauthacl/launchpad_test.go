@@ -17,10 +17,10 @@ import (
 	qt "github.com/frankban/quicktest"
 	"golang.org/x/sync/singleflight"
 	"gopkg.in/errgo.v1"
-	"launchpad.net/lpad"
 
 	"github.com/canonical/ssoauth"
 	"github.com/canonical/ssoauth/ssoauthacl"
+	"github.com/canonical/ssoauth/ssoauthacl/lpad"
 )
 
 func TestLaunchpadTeamMatcher(t *testing.T) {

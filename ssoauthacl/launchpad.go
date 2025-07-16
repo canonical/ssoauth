@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/sync/singleflight"
 	"gopkg.in/errgo.v1"
-	"launchpad.net/lpad"
 
 	"github.com/canonical/ssoauth"
+	"github.com/canonical/ssoauth/ssoauthacl/lpad"
 )
 
 // A LaunchpadTeamMatcher is an IdentityMatcher that matches against an
